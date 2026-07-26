@@ -26,6 +26,10 @@ export interface MonthInputs {
   comprasMsi: CompraMsi[]
   reservaAporteMes: number
   variablesDelMes: number
+  /** Reserva que traías al empezar el mes (antes del aporte de este mes). */
+  reservaSaldoEntrante?: number
+  /** Gastos marcados como imprevisto en el mes. Se cubren primero con la reserva. */
+  imprevistosDelMes?: number
   colchonEntrante: number
   usarValorAlto: boolean
 }
@@ -40,12 +44,19 @@ export function computeMonthSlice(input: MonthInputs): MonthSlice {
     .filter((c) => estaActivaEnMes(c, input.ym))
     .reduce((sum, c) => sum + c.mensualidad, 0)
 
+  // Los imprevistos salen primero de la reserva (saldo previo + aporte del mes).
+  // Lo que la reserva NO alcance a cubrir sí baja el disponible real.
+  const fondoDisponible = Math.max((input.reservaSaldoEntrante ?? 0) + input.reservaAporteMes, 0)
+  const imprevistos = input.imprevistosDelMes ?? 0
+  const imprevistosExceso = Math.max(imprevistos - fondoDisponible, 0)
+
   const disponible =
     ingresos -
     gastosFijos -
     msiTotal -
     input.reservaAporteMes -
-    input.variablesDelMes +
+    input.variablesDelMes -
+    imprevistosExceso +
     input.colchonEntrante
 
   return {
@@ -55,6 +66,7 @@ export function computeMonthSlice(input: MonthInputs): MonthSlice {
     msiTotal,
     reservaAporte: input.reservaAporteMes,
     variablesGastados: input.variablesDelMes,
+    imprevistosExceso,
     colchonEntrante: input.colchonEntrante,
     disponible,
     enRojo: disponible < 0,

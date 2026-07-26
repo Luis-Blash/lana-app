@@ -51,6 +51,8 @@ export interface MonthSlice {
   msiTotal: number
   reservaAporte: number
   variablesGastados: number
+  /** Imprevistos que la reserva NO alcanzó a cubrir y sí pegan al disponible. */
+  imprevistosExceso: number
   colchonEntrante: number
   disponible: number
   enRojo: boolean

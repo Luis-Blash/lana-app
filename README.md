@@ -1,56 +1,87 @@
-# Welcome to your Expo app 👋
+# lana
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App móvil personal de finanzas (Expo, React Native). Todo local, sin backend, sin nube — vive en
+tu teléfono.
 
-## Get started
+## De qué va
 
-1. Install dependencies
+El objetivo es uno solo: saber en cualquier momento **cuánto puedes gastar o comprometer sin
+quedarte sin liquidez**, incluyendo simular compras a meses sin intereses (MSI) antes de hacerlas.
 
-   ```bash
-   npm install
-   ```
+- **Inicio**: el "disponible real" del mes, grande y arriba, con una proyección de los próximos 6
+  meses coloreada (verde/rojo) y la lista de movimientos del mes (editables).
+- **Simular**: metes un precio y un plazo (1/3/6/12 meses) y ves al instante la mensualidad y si
+  algún mes futuro queda en rojo, antes de comprar.
+- **Ingresos** / **Gastos**: tus ingresos y gastos fijos (mensuales, semanales o cada varios
+  meses), con total del mes y edición.
+- **Apartados**: el colchón y la reserva para imprevistos que ya tienes, cuánto apartas cada mes,
+  y un botón para empezar de cero.
 
-2. Start the app
+### Cómo se calcula el disponible
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+disponible = ingresos_del_mes − gastos_fijos_del_mes − pagos_MSI_activos
+           − aporte_a_la_reserva − gastos_del_día_a_día − imprevistos_no_cubiertos
+           + lo_que_sobró_el_mes_pasado
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+La reserva para imprevistos es un fondo real que se acumula mes a mes; si un imprevisto se pasa de
+lo que hay en el fondo, el excedente sí baja el disponible. Lo que sobra al cerrar el mes se guarda
+solo y se suma al siguiente (y si te pasaste, se resta).
 
-### Other setup steps
+Toda esta lógica vive como funciones puras en `src/domain/` — ver [CLAUDE.md](CLAUDE.md) para el
+detalle de la arquitectura.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Requisitos
 
-## Learn more
+- Node.js y npm
+- Expo SDK **57** (revisa los docs versionados: https://docs.expo.dev/versions/v57.0.0/)
+- Para correr en Android: Android Studio con un emulador, o un teléfono con
+  [Expo Go](https://expo.dev/go) / depuración USB
 
-To learn more about developing your project with Expo, look at the following resources:
+## Empezar
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm install
+npx expo start
+```
 
-## Join the community
+En la salida del comando puedes abrir la app en un emulador Android, un simulador iOS, en el
+navegador, o escaneando el QR con Expo Go.
 
-Join our community of developers creating universal apps.
+```bash
+npm run android   # abre directo en un emulador/dispositivo Android
+npm run ios       # abre directo en un simulador iOS
+npm run web       # corre en el navegador
+npm run lint      # expo lint
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+No hay corredor de tests configurado. Para validar la lógica de `src/domain/` contra números
+reales, se puede escribir un script suelto y correrlo con `npx tsx ruta/al/script.ts`.
+
+### APK rápido (para instalar en tu teléfono o compartir para probar)
+
+Este proyecto usa el flujo *managed* de Expo, así que la carpeta `android/` no existe hasta que se
+genera una vez:
+
+```bash
+npx expo prebuild -p android     # solo la primera vez (o si cambias app.json/plugins)
+cd android
+./gradlew assembleRelease        # Windows: gradlew.bat assembleRelease
+```
+
+El APK queda en:
+
+```
+android/app/build/outputs/apk/release/app-release.apk
+```
+
+Instálalo con `adb install android/app/build/outputs/apk/release/app-release.apk`
+o pásalo al teléfono y ábrelo (activa "instalar de orígenes desconocidos" si
+Android lo pide).
+
+## Aprender más
+
+- [Documentación de Expo v57](https://docs.expo.dev/versions/v57.0.0/)
+- [Expo Router (rutas por archivo)](https://docs.expo.dev/router/introduction)
+- [NativeWind](https://www.nativewind.dev/)

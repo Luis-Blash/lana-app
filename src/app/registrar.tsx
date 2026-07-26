@@ -1,20 +1,35 @@
-import { useRouter } from 'expo-router'
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useSQLiteContext } from 'expo-sqlite'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 
+import { getTransaccion } from '@/db/queries'
 import { TipoTransaccion } from '@/domain/types'
 import { useFinanceStore } from '@/store/useFinanceStore'
 
 export default function RegistrarScreen() {
   const db = useSQLiteContext()
   const router = useRouter()
+  const { id } = useLocalSearchParams<{ id?: string }>()
+  const editandoId = id ? Number(id) : null
+
   const registrarGasto = useFinanceStore((s) => s.registrarGasto)
+  const editarGasto = useFinanceStore((s) => s.editarGasto)
 
   const [monto, setMonto] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [tipo, setTipo] = useState<TipoTransaccion>('variable')
   const [guardando, setGuardando] = useState(false)
+
+  useEffect(() => {
+    if (editandoId == null) return
+    getTransaccion(db, editandoId).then((t) => {
+      if (!t) return
+      setMonto(String(t.monto))
+      setDescripcion(t.descripcion)
+      setTipo(t.tipo)
+    })
+  }, [db, editandoId])
 
   const montoNumero = Number(monto.replace(',', '.'))
   const esValido = montoNumero > 0
@@ -22,12 +37,17 @@ export default function RegistrarScreen() {
   async function guardar() {
     if (!esValido || guardando) return
     setGuardando(true)
-    await registrarGasto(db, { monto: montoNumero, descripcion, tipo })
+    if (editandoId != null) {
+      await editarGasto(db, editandoId, { monto: montoNumero, descripcion, tipo })
+    } else {
+      await registrarGasto(db, { monto: montoNumero, descripcion, tipo })
+    }
     router.back()
   }
 
   return (
     <View className="flex-1 gap-6 bg-white p-6 dark:bg-zinc-900">
+      <Stack.Screen options={{ title: editandoId != null ? 'Editar gasto' : 'Registrar gasto' }} />
       <TextInput
         autoFocus
         value={monto}
@@ -56,7 +76,7 @@ export default function RegistrarScreen() {
         disabled={!esValido || guardando}
         className={`items-center rounded-xl py-4 ${esValido ? 'bg-green-600 active:bg-green-700' : 'bg-zinc-300 dark:bg-zinc-700'}`}
       >
-        <Text className="text-base font-semibold text-white">Guardar</Text>
+        <Text className="text-base font-semibold text-white">{editandoId != null ? 'Guardar cambios' : 'Guardar'}</Text>
       </Pressable>
     </View>
   )

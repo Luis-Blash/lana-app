@@ -6,12 +6,15 @@ import { Screen } from '@/components/Screen'
 import { BotonPrimario, Help, SectionTitle, TextField } from '@/components/ui'
 import {
   getEstadoMensual,
+  getReservaAporteMes,
   getReservaMontoDefault,
+  getTransaccionesDelMes,
   resetHistorial,
   setReservaMontoDefault,
   setReservaOverrideMes,
   setSaldosIniciales,
 } from '@/db/queries'
+import { formatMXN } from '@/lib/format'
 import { mesActual, mesAncla } from '@/lib/fechas'
 import { useFinanceStore } from '@/store/useFinanceStore'
 
@@ -22,15 +25,21 @@ export default function ApartadosScreen() {
   const [reservaDefault, setReservaDefaultState] = useState(0)
   const [colchonInicial, setColchonInicial] = useState(0)
   const [reservaInicial, setReservaInicial] = useState(0)
+  const [aporteMes, setAporteMes] = useState(0)
+  const [imprevistosMes, setImprevistosMes] = useState(0)
 
   const recargar = useCallback(async () => {
-    const [reservaDefaultData, ancla] = await Promise.all([
+    const [reservaDefaultData, ancla, aporte, transacciones] = await Promise.all([
       getReservaMontoDefault(db),
       getEstadoMensual(db, mesAncla()),
+      getReservaAporteMes(db, mesActual()),
+      getTransaccionesDelMes(db, mesActual()),
     ])
     setReservaDefaultState(reservaDefaultData)
     setColchonInicial(ancla?.colchonAcumulado ?? 0)
     setReservaInicial(ancla?.reservaSaldo ?? 0)
+    setAporteMes(aporte)
+    setImprevistosMes(transacciones.filter((t) => t.tipo === 'imprevisto').reduce((s, t) => s + t.monto, 0))
     await cargarStore(db)
   }, [db, cargarStore])
 
@@ -73,6 +82,9 @@ export default function ApartadosScreen() {
       <ReservaSection
         key={`res-${reservaDefault}`}
         montoDefault={reservaDefault}
+        reservaInicial={reservaInicial}
+        aporteMes={aporteMes}
+        imprevistosMes={imprevistosMes}
         onGuardarDefault={async (monto) => {
           await setReservaMontoDefault(db, monto)
           await recargar()
@@ -132,16 +144,24 @@ function SaldosSection({
 
 function ReservaSection({
   montoDefault,
+  reservaInicial,
+  aporteMes,
+  imprevistosMes,
   onGuardarDefault,
   onGuardarSoloEsteMes,
 }: {
   montoDefault: number
+  reservaInicial: number
+  aporteMes: number
+  imprevistosMes: number
   onGuardarDefault: (monto: number) => void
   onGuardarSoloEsteMes: (monto: number) => void
 }) {
   const [valorDefault, setValorDefault] = useState(String(montoDefault))
   const [mostrarEsteMes, setMostrarEsteMes] = useState(false)
   const [valorMes, setValorMes] = useState('')
+
+  const disponibleAhora = reservaInicial + aporteMes - imprevistosMes
 
   return (
     <View className="gap-3">
@@ -150,6 +170,19 @@ function ReservaSection({
         Cada mes la app guarda esta cantidad aparte (medicinas, cosas inesperadas) antes de decirte cuánto te queda
         libre. Así nunca te agarran desprevenido.
       </Help>
+
+      <View className="gap-1 rounded-xl bg-amber-100 px-4 py-3 dark:bg-amber-950">
+        <View className="flex-row items-center justify-between">
+          <Text className="font-medium text-amber-800 dark:text-amber-200">Reserva disponible ahora</Text>
+          <Text className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-200">
+            {formatMXN(disponibleAhora)}
+          </Text>
+        </View>
+        <Text className="text-xs text-amber-700/80 dark:text-amber-200/80">
+          Traías {formatMXN(reservaInicial)} + {formatMXN(aporteMes)} este mes
+          {imprevistosMes > 0 ? ` − ${formatMXN(imprevistosMes)} que ya usaste en imprevistos` : ''}.
+        </Text>
+      </View>
 
       <View className="flex-row items-end gap-2">
         <TextField label="Cada mes aparto" value={valorDefault} onChangeText={setValorDefault} keyboardType="decimal-pad" />

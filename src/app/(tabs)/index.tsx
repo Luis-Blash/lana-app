@@ -6,6 +6,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { HeroDisponible } from '@/components/HeroDisponible'
+import { MovimientosMes } from '@/components/MovimientosMes'
 import { ProjectionStrip } from '@/components/ProjectionStrip'
 import { formatMXN } from '@/lib/format'
 import { useFinanceStore } from '@/store/useFinanceStore'
@@ -14,7 +15,7 @@ export default function InicioScreen() {
   const db = useSQLiteContext()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { cargando, slice, proyeccion, cargar } = useFinanceStore()
+  const { cargando, slice, proyeccion, transacciones, cargar, eliminarGasto } = useFinanceStore()
 
   useEffect(() => {
     cargar(db)
@@ -40,11 +41,23 @@ export default function InicioScreen() {
         <View className="gap-2 rounded-2xl bg-zinc-100 p-4 dark:bg-zinc-800">
           <Row label="Ingresos" valor={slice.ingresos} />
           <Row label="Gastos fijos" valor={-slice.gastosFijos} />
-          <Row label="Mensualidades MSI" valor={-slice.msiTotal} />
-          <Row label="Reserva imprevistos" valor={-slice.reservaAporte} />
-          <Row label="Gastos variables" valor={-slice.variablesGastados} />
-          <Row label="Colchón del mes anterior" valor={slice.colchonEntrante} />
+          <Row label="Pagos a meses sin intereses" valor={-slice.msiTotal} />
+          <Row label="Apartado para imprevistos" valor={-slice.reservaAporte} />
+          <Row label="Gastos del día a día" valor={-slice.variablesGastados} />
+          {slice.imprevistosExceso > 0 && (
+            <Row label="Imprevistos que no cubrió tu reserva" valor={-slice.imprevistosExceso} />
+          )}
+          <Row label="Te sobró el mes pasado" valor={slice.colchonEntrante} />
         </View>
+        <Text className="-mt-4 px-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Lo que te sobra cada mes se guarda solo y se suma al siguiente. Si te pasas de gasto, se resta.
+        </Text>
+
+        <MovimientosMes
+          transacciones={transacciones}
+          onEditar={(id) => router.push(`/registrar?id=${id}`)}
+          onEliminar={(id) => eliminarGasto(db, id)}
+        />
       </ScrollView>
 
       <Pressable

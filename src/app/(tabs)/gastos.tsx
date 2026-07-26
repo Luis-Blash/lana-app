@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native'
 
 import { Screen } from '@/components/Screen'
 import { BotonPrimario, Chip, Help, SectionTitle, TextField } from '@/components/ui'
-import { deleteGastoFijo, getGastosFijos, insertGastoFijo } from '@/db/queries'
+import { deleteGastoFijo, getGastosFijos, insertGastoFijo, updateGastoFijo } from '@/db/queries'
 import { Frecuencia, GastoFijo } from '@/domain/types'
 import { DIAS_SEMANA, proximosMeses } from '@/lib/fechas'
 import { formatMesCorto, formatMXN } from '@/lib/format'
@@ -17,6 +17,7 @@ export default function GastosScreen() {
 
   const [gastos, setGastos] = useState<GastoFijo[]>([])
 
+  const [editandoId, setEditandoId] = useState<number | null>(null)
   const [nombre, setNombre] = useState('')
   const [monto, setMonto] = useState('')
   const [montoMax, setMontoMax] = useState('')
@@ -38,21 +39,36 @@ export default function GastosScreen() {
   }, [recargar])
 
   function limpiar() {
+    setEditandoId(null)
     setNombre('')
     setMonto('')
     setMontoMax('')
     setVaria(false)
+    setFrecuencia('mensual')
     setDiaDelMes('')
     setDiaSemana(null)
     setCadaNMeses(2)
     setProximoMes(null)
   }
 
-  async function agregar() {
+  function cargarParaEditar(g: GastoFijo) {
+    setEditandoId(g.id)
+    setNombre(g.nombre)
+    setMonto(String(g.montoMin))
+    setMontoMax(String(g.montoMax))
+    setVaria(g.montoMin !== g.montoMax)
+    setFrecuencia(g.frecuencia)
+    setDiaDelMes(g.diaDelMes != null ? String(g.diaDelMes) : '')
+    setDiaSemana(g.diaSemana)
+    setCadaNMeses(g.cadaNMeses ?? 2)
+    setProximoMes(g.mesAncla)
+  }
+
+  async function guardar() {
     if (!nombre || !monto) return
     const min = Number(monto)
     const max = varia && montoMax ? Number(montoMax) : min
-    await insertGastoFijo(db, {
+    const datos = {
       nombre,
       montoMin: min,
       montoMax: max,
@@ -61,7 +77,12 @@ export default function GastosScreen() {
       diaSemana: frecuencia === 'semanal' ? diaSemana : null,
       cadaNMeses: frecuencia === 'cada_n_meses' ? cadaNMeses : null,
       mesAncla: frecuencia === 'cada_n_meses' ? proximoMes : null,
-    })
+    }
+    if (editandoId != null) {
+      await updateGastoFijo(db, editandoId, datos)
+    } else {
+      await insertGastoFijo(db, datos)
+    }
     limpiar()
     await recargar()
   }
@@ -82,7 +103,13 @@ export default function GastosScreen() {
       </View>
 
       {gastos.map((g) => (
-        <View key={g.id} className="flex-row items-center justify-between rounded-lg bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
+        <Pressable
+          key={g.id}
+          onPress={() => cargarParaEditar(g)}
+          className={`flex-row items-center justify-between rounded-lg px-4 py-3 ${
+            editandoId === g.id ? 'bg-green-100 dark:bg-green-950' : 'bg-zinc-100 dark:bg-zinc-800'
+          }`}
+        >
           <View className="flex-1 pr-2">
             <Text className="font-medium text-zinc-900 dark:text-zinc-100">{g.nombre}</Text>
             <Text className="text-xs text-zinc-500 dark:text-zinc-400">{describeFrecuencia(g)}</Text>
@@ -94,13 +121,15 @@ export default function GastosScreen() {
             <Pressable
               onPress={async () => {
                 await deleteGastoFijo(db, g.id)
+                if (editandoId === g.id) limpiar()
                 await recargar()
               }}
+              hitSlop={8}
             >
               <Text className="text-red-500">Eliminar</Text>
             </Pressable>
           </View>
-        </View>
+        </Pressable>
       ))}
 
       <View className="mt-2 gap-2 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
@@ -116,6 +145,10 @@ export default function GastosScreen() {
           <Text className="text-sm text-zinc-700 dark:text-zinc-300">El monto varía (ej. despensa de $300 a $480)</Text>
         </Pressable>
         {varia ? <TextField label="Hasta cuánto llega" value={montoMax} onChangeText={setMontoMax} keyboardType="decimal-pad" /> : null}
+
+        {editandoId != null ? (
+          <Text className="text-xs font-medium text-green-600 dark:text-green-400">Editando “{nombre}”</Text>
+        ) : null}
 
         <Text className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">¿Cada cuándo?</Text>
         <View className="flex-row flex-wrap gap-2">
@@ -161,7 +194,12 @@ export default function GastosScreen() {
           </>
         )}
 
-        <BotonPrimario label="Agregar gasto fijo" onPress={agregar} />
+        <BotonPrimario label={editandoId != null ? 'Guardar cambios' : 'Agregar gasto fijo'} onPress={guardar} />
+        {editandoId != null ? (
+          <Pressable onPress={limpiar} className="items-center py-1">
+            <Text className="text-sm text-zinc-500 dark:text-zinc-400">Cancelar edición</Text>
+          </Pressable>
+        ) : null}
       </View>
     </Screen>
   )

@@ -79,11 +79,14 @@ export async function cerrarMesesPendientes(db: SQLiteDatabase): Promise<void> {
       comprasMsi,
       reservaAporteMes: reservaAporte,
       variablesDelMes,
+      reservaSaldoEntrante,
+      imprevistosDelMes,
       colchonEntrante,
       usarValorAlto: true,
     })
 
-    const reservaSaldoResultante = reservaSaldoEntrante + reservaAporte - imprevistosDelMes
+    // La reserva no baja de cero: el exceso ya pegó al disponible del mes.
+    const reservaSaldoResultante = Math.max(reservaSaldoEntrante + reservaAporte - imprevistosDelMes, 0)
     await cerrarMes(db, ym, slice.disponible, reservaSaldoResultante)
   }
 }

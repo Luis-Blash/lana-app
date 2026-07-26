@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite'
 import { create } from 'zustand'
 
 import {
+  deleteTransaccion,
   getComprasMsiActivas,
   getEstadoMensual,
   getGastosFijos,
@@ -9,6 +10,7 @@ import {
   getReservaAportesEnRango,
   getTransaccionesDelMes,
   insertTransaccion,
+  updateTransaccion,
 } from '@/db/queries'
 import { computeMonthSlice } from '@/domain/disponible'
 import { calcularMensualidad } from '@/domain/msi'
@@ -49,6 +51,12 @@ interface FinanceState {
     db: SQLiteDatabase,
     gasto: { monto: number; descripcion: string; tipo: TipoTransaccion },
   ) => Promise<void>
+  editarGasto: (
+    db: SQLiteDatabase,
+    id: number,
+    gasto: { monto: number; descripcion: string; tipo: TipoTransaccion },
+  ) => Promise<void>
+  eliminarGasto: (db: SQLiteDatabase, id: number) => Promise<void>
   simularCompra: (montoTotal: number, numMeses: number) => { mensualidad: number; proyeccion: ProjectedMonth[] }
 }
 
@@ -89,6 +97,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       comprasMsi,
       reservaAporteMes,
       variablesDelMes,
+      reservaSaldoEntrante: reservaSaldoInicial,
+      imprevistosDelMes,
       colchonEntrante,
       usarValorAlto: false,
     })
@@ -124,6 +134,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   registrarGasto: async (db, gasto) => {
     const fecha = new Date().toISOString().slice(0, 10)
     await insertTransaccion(db, { fecha, monto: gasto.monto, descripcion: gasto.descripcion, tipo: gasto.tipo })
+    await get().cargar(db)
+  },
+
+  editarGasto: async (db, id, gasto) => {
+    await updateTransaccion(db, id, gasto)
+    await get().cargar(db)
+  },
+
+  eliminarGasto: async (db, id) => {
+    await deleteTransaccion(db, id)
     await get().cargar(db)
   },
 

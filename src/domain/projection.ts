@@ -36,11 +36,14 @@ export function projectMonths(input: ProjectionInput): ProjectedMonth[] {
       comprasMsi: msiDelMes,
       reservaAporteMes: reservaAporte,
       variablesDelMes: variables,
+      reservaSaldoEntrante: reservaSaldo,
+      imprevistosDelMes: imprevistos,
       colchonEntrante: colchon,
       usarValorAlto: true,
     })
 
-    reservaSaldo = reservaSaldo + reservaAporte - imprevistos
+    // La reserva no baja de cero: el exceso ya se restó del disponible en el slice.
+    reservaSaldo = Math.max(reservaSaldo + reservaAporte - imprevistos, 0)
     resultado.push({ ...slice, reservaSaldo })
 
     colchon = slice.disponible

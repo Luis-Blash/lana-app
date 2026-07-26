@@ -82,6 +82,20 @@ export async function insertIngresoFijo(
   return result.lastInsertRowId
 }
 
+export async function updateIngresoFijo(
+  db: SQLiteDatabase,
+  id: number,
+  ingreso: Omit<IngresoFijo, 'id'>,
+): Promise<void> {
+  await db.runAsync(
+    'UPDATE ingresos_fijos SET nombre = ?, monto = ?, dia_del_mes = ? WHERE id = ?',
+    ingreso.nombre,
+    ingreso.monto,
+    ingreso.diaDelMes,
+    id,
+  )
+}
+
 export async function deleteIngresoFijo(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('DELETE FROM ingresos_fijos WHERE id = ?', id)
 }
@@ -106,6 +120,28 @@ export async function insertGastoFijo(db: SQLiteDatabase, gasto: Omit<GastoFijo,
     gasto.mesAncla,
   )
   return result.lastInsertRowId
+}
+
+export async function updateGastoFijo(
+  db: SQLiteDatabase,
+  id: number,
+  gasto: Omit<GastoFijo, 'id'>,
+): Promise<void> {
+  await db.runAsync(
+    `UPDATE gastos_fijos SET
+      nombre = ?, monto_min = ?, monto_max = ?, frecuencia = ?,
+      dia_del_mes = ?, dia_semana = ?, cada_n_meses = ?, mes_ancla = ?
+     WHERE id = ?`,
+    gasto.nombre,
+    gasto.montoMin,
+    gasto.montoMax,
+    gasto.frecuencia,
+    gasto.diaDelMes,
+    gasto.diaSemana,
+    gasto.cadaNMeses,
+    gasto.mesAncla,
+    id,
+  )
 }
 
 export async function deleteGastoFijo(db: SQLiteDatabase, id: number): Promise<void> {
@@ -151,6 +187,29 @@ export async function insertTransaccion(db: SQLiteDatabase, t: Omit<Transaccion,
     t.tipo,
   )
   return result.lastInsertRowId
+}
+
+export async function updateTransaccion(
+  db: SQLiteDatabase,
+  id: number,
+  t: { monto: number; descripcion: string; tipo: TipoTransaccion },
+): Promise<void> {
+  await db.runAsync(
+    'UPDATE transacciones SET monto = ?, descripcion = ?, tipo = ? WHERE id = ?',
+    t.monto,
+    t.descripcion,
+    t.tipo,
+    id,
+  )
+}
+
+export async function getTransaccion(db: SQLiteDatabase, id: number): Promise<Transaccion | null> {
+  const row = await db.getFirstAsync<TransaccionRow>('SELECT * FROM transacciones WHERE id = ?', id)
+  return row ? toTransaccion(row) : null
+}
+
+export async function deleteTransaccion(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM transacciones WHERE id = ?', id)
 }
 
 export async function getReservaMontoDefault(db: SQLiteDatabase): Promise<number> {
