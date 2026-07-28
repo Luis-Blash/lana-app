@@ -1,9 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
 
 export const DATABASE_NAME = 'lana.db'
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
-const DDL = `
+const DDL_V1 = `
 PRAGMA journal_mode = WAL;
 
 CREATE TABLE IF NOT EXISTS ingresos_fijos (
@@ -66,14 +66,41 @@ CREATE TABLE IF NOT EXISTS estado_mensual (
 );
 `
 
+const DDL_V2 = `
+ALTER TABLE gastos_fijos ADD COLUMN anio_inicio INTEGER;
+ALTER TABLE gastos_fijos ADD COLUMN mes_inicio INTEGER;
+ALTER TABLE gastos_fijos ADD COLUMN anio_fin INTEGER;
+ALTER TABLE gastos_fijos ADD COLUMN mes_fin INTEGER;
+
+CREATE TABLE IF NOT EXISTS escenario_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tipo TEXT NOT NULL CHECK (tipo IN ('unico','meses','recurrente')),
+  descripcion TEXT NOT NULL DEFAULT '',
+  monto REAL NOT NULL,
+  num_meses INTEGER NOT NULL DEFAULT 1,
+  anio_inicio INTEGER NOT NULL,
+  mes_inicio INTEGER NOT NULL,
+  activo INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_transacciones_fecha ON transacciones (fecha);
+`
+
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version')
-  const currentVersion = row?.user_version ?? 0
+  let currentVersion = row?.user_version ?? 0
   if (currentVersion >= SCHEMA_VERSION) return
 
-  await db.execAsync(DDL)
-  await db.execAsync(
-    `INSERT OR IGNORE INTO reserva_config (id, monto_default) VALUES (1, 0);`,
-  )
+  if (currentVersion < 1) {
+    await db.execAsync(DDL_V1)
+    await db.execAsync(`INSERT OR IGNORE INTO reserva_config (id, monto_default) VALUES (1, 0);`)
+    currentVersion = 1
+  }
+
+  if (currentVersion < 2) {
+    await db.execAsync(DDL_V2)
+    currentVersion = 2
+  }
+
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`)
 }

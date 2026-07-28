@@ -1,6 +1,14 @@
-import { contarOcurrenciasDiaSemana, ocurreEsteMes } from './month'
+import { absoluteMonthIndex, contarOcurrenciasDiaSemana, ocurreEsteMes } from './month'
 import { estaActivaEnMes } from './msi'
 import { CompraMsi, GastoFijo, IngresoFijo, MonthSlice, YearMonth } from './types'
+
+/** null en inicio/fin = para siempre en esa punta. Usado por suscripciones con duración fija. */
+export function estaVigenteEnMes(gasto: GastoFijo, ym: YearMonth): boolean {
+  const idx = absoluteMonthIndex(ym)
+  if (gasto.inicio && idx < absoluteMonthIndex(gasto.inicio)) return false
+  if (gasto.fin && idx > absoluteMonthIndex(gasto.fin)) return false
+  return true
+}
 
 /** En proyección se usa el monto alto de un rango (conservador); en lo ya ocurrido, el real. */
 export function montoOcurrenciaGastoFijo(gasto: GastoFijo, usarValorAlto: boolean): number {
@@ -8,6 +16,7 @@ export function montoOcurrenciaGastoFijo(gasto: GastoFijo, usarValorAlto: boolea
 }
 
 export function totalGastoFijoEnMes(gasto: GastoFijo, ym: YearMonth, usarValorAlto: boolean): number {
+  if (!estaVigenteEnMes(gasto, ym)) return 0
   const monto = montoOcurrenciaGastoFijo(gasto, usarValorAlto)
   switch (gasto.frecuencia) {
     case 'mensual':
@@ -30,6 +39,8 @@ export interface MonthInputs {
   reservaSaldoEntrante?: number
   /** Gastos marcados como imprevisto en el mes. Se cubren primero con la reserva. */
   imprevistosDelMes?: number
+  /** Impacto de ítems de escenario (simulación) en este mes. */
+  extrasDelMes?: number
   colchonEntrante: number
   usarValorAlto: boolean
 }
@@ -49,15 +60,18 @@ export function computeMonthSlice(input: MonthInputs): MonthSlice {
   const fondoDisponible = Math.max((input.reservaSaldoEntrante ?? 0) + input.reservaAporteMes, 0)
   const imprevistos = input.imprevistosDelMes ?? 0
   const imprevistosExceso = Math.max(imprevistos - fondoDisponible, 0)
+  const extras = input.extrasDelMes ?? 0
 
-  const disponible =
+  const saldoDelMes =
     ingresos -
     gastosFijos -
     msiTotal -
     input.reservaAporteMes -
     input.variablesDelMes -
-    imprevistosExceso +
-    input.colchonEntrante
+    imprevistosExceso -
+    extras
+
+  const disponible = saldoDelMes + input.colchonEntrante
 
   return {
     ym: input.ym,
@@ -67,7 +81,10 @@ export function computeMonthSlice(input: MonthInputs): MonthSlice {
     reservaAporte: input.reservaAporteMes,
     variablesGastados: input.variablesDelMes,
     imprevistosExceso,
+    extras,
     colchonEntrante: input.colchonEntrante,
+    saldoDelMes,
+    enRojoDelMes: saldoDelMes < 0,
     disponible,
     enRojo: disponible < 0,
   }

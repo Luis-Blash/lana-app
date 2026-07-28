@@ -1,7 +1,16 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
 
 import { addMonths, monthKey } from '@/domain/month'
-import { CompraMsi, GastoFijo, IngresoFijo, Transaccion, TipoTransaccion, YearMonth } from '@/domain/types'
+import {
+  CompraMsi,
+  EscenarioItem,
+  GastoFijo,
+  IngresoFijo,
+  TipoEscenario,
+  TipoTransaccion,
+  Transaccion,
+  YearMonth,
+} from '@/domain/types'
 
 type IngresoFijoRow = { id: number; nombre: string; monto: number; dia_del_mes: number }
 type GastoFijoRow = {
@@ -14,6 +23,10 @@ type GastoFijoRow = {
   dia_semana: number | null
   cada_n_meses: number | null
   mes_ancla: number | null
+  anio_inicio: number | null
+  mes_inicio: number | null
+  anio_fin: number | null
+  mes_fin: number | null
 }
 type CompraMsiRow = {
   id: number
@@ -26,6 +39,16 @@ type CompraMsiRow = {
   activa: number
 }
 type TransaccionRow = { id: number; fecha: string; monto: number; descripcion: string; tipo: TipoTransaccion }
+type EscenarioItemRow = {
+  id: number
+  tipo: TipoEscenario
+  descripcion: string
+  monto: number
+  num_meses: number
+  anio_inicio: number
+  mes_inicio: number
+  activo: number
+}
 
 const toIngresoFijo = (r: IngresoFijoRow): IngresoFijo => ({
   id: r.id,
@@ -44,6 +67,8 @@ const toGastoFijo = (r: GastoFijoRow): GastoFijo => ({
   diaSemana: r.dia_semana,
   cadaNMeses: r.cada_n_meses,
   mesAncla: r.mes_ancla,
+  inicio: r.anio_inicio != null && r.mes_inicio != null ? { anio: r.anio_inicio, mes: r.mes_inicio } : null,
+  fin: r.anio_fin != null && r.mes_fin != null ? { anio: r.anio_fin, mes: r.mes_fin } : null,
 })
 
 const toCompraMsi = (r: CompraMsiRow): CompraMsi => ({
@@ -62,6 +87,16 @@ const toTransaccion = (r: TransaccionRow): Transaccion => ({
   monto: r.monto,
   descripcion: r.descripcion,
   tipo: r.tipo,
+})
+
+const toEscenarioItem = (r: EscenarioItemRow): EscenarioItem => ({
+  id: r.id,
+  tipo: r.tipo,
+  descripcion: r.descripcion,
+  monto: r.monto,
+  numMeses: r.num_meses,
+  inicio: { anio: r.anio_inicio, mes: r.mes_inicio },
+  activo: r.activo === 1,
 })
 
 export async function getIngresosFijos(db: SQLiteDatabase): Promise<IngresoFijo[]> {
@@ -108,8 +143,9 @@ export async function getGastosFijos(db: SQLiteDatabase): Promise<GastoFijo[]> {
 export async function insertGastoFijo(db: SQLiteDatabase, gasto: Omit<GastoFijo, 'id'>): Promise<number> {
   const result = await db.runAsync(
     `INSERT INTO gastos_fijos
-      (nombre, monto_min, monto_max, frecuencia, dia_del_mes, dia_semana, cada_n_meses, mes_ancla)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (nombre, monto_min, monto_max, frecuencia, dia_del_mes, dia_semana, cada_n_meses, mes_ancla,
+       anio_inicio, mes_inicio, anio_fin, mes_fin)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     gasto.nombre,
     gasto.montoMin,
     gasto.montoMax,
@@ -118,6 +154,10 @@ export async function insertGastoFijo(db: SQLiteDatabase, gasto: Omit<GastoFijo,
     gasto.diaSemana,
     gasto.cadaNMeses,
     gasto.mesAncla,
+    gasto.inicio?.anio ?? null,
+    gasto.inicio?.mes ?? null,
+    gasto.fin?.anio ?? null,
+    gasto.fin?.mes ?? null,
   )
   return result.lastInsertRowId
 }
@@ -130,7 +170,8 @@ export async function updateGastoFijo(
   await db.runAsync(
     `UPDATE gastos_fijos SET
       nombre = ?, monto_min = ?, monto_max = ?, frecuencia = ?,
-      dia_del_mes = ?, dia_semana = ?, cada_n_meses = ?, mes_ancla = ?
+      dia_del_mes = ?, dia_semana = ?, cada_n_meses = ?, mes_ancla = ?,
+      anio_inicio = ?, mes_inicio = ?, anio_fin = ?, mes_fin = ?
      WHERE id = ?`,
     gasto.nombre,
     gasto.montoMin,
@@ -140,12 +181,23 @@ export async function updateGastoFijo(
     gasto.diaSemana,
     gasto.cadaNMeses,
     gasto.mesAncla,
+    gasto.inicio?.anio ?? null,
+    gasto.inicio?.mes ?? null,
+    gasto.fin?.anio ?? null,
+    gasto.fin?.mes ?? null,
     id,
   )
 }
 
 export async function deleteGastoFijo(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('DELETE FROM gastos_fijos WHERE id = ?', id)
+}
+
+export async function getComprasMsi(db: SQLiteDatabase): Promise<CompraMsi[]> {
+  const rows = await db.getAllAsync<CompraMsiRow>(
+    'SELECT * FROM compras_msi ORDER BY anio_inicio DESC, mes_inicio DESC',
+  )
+  return rows.map(toCompraMsi)
 }
 
 export async function getComprasMsiActivas(db: SQLiteDatabase): Promise<CompraMsi[]> {
@@ -169,11 +221,57 @@ export async function insertCompraMsi(db: SQLiteDatabase, compra: Omit<CompraMsi
   return result.lastInsertRowId
 }
 
+export async function updateCompraMsi(
+  db: SQLiteDatabase,
+  id: number,
+  compra: Omit<CompraMsi, 'id'>,
+): Promise<void> {
+  await db.runAsync(
+    `UPDATE compras_msi SET
+      descripcion = ?, monto_total = ?, num_meses = ?, mensualidad = ?,
+      anio_inicio = ?, mes_inicio = ?, activa = ?
+     WHERE id = ?`,
+    compra.descripcion,
+    compra.montoTotal,
+    compra.numMeses,
+    compra.mensualidad,
+    compra.fechaInicio.anio,
+    compra.fechaInicio.mes,
+    compra.activa ? 1 : 0,
+    id,
+  )
+}
+
+export async function desactivarCompraMsi(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('UPDATE compras_msi SET activa = 0 WHERE id = ?', id)
+}
+
+export async function deleteCompraMsi(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM compras_msi WHERE id = ?', id)
+}
+
 export async function getTransaccionesDelMes(db: SQLiteDatabase, ym: YearMonth): Promise<Transaccion[]> {
   const prefix = `${ym.anio}-${String(ym.mes).padStart(2, '0')}`
   const rows = await db.getAllAsync<TransaccionRow>(
     "SELECT * FROM transacciones WHERE fecha LIKE ? || '%' ORDER BY fecha DESC",
     prefix,
+  )
+  return rows.map(toTransaccion)
+}
+
+/** Todas las transacciones en `meses` meses consecutivos a partir de `desde` (incluido). */
+export async function getTransaccionesEnRango(
+  db: SQLiteDatabase,
+  desde: YearMonth,
+  meses: number,
+): Promise<Transaccion[]> {
+  const hasta = addMonths(desde, meses)
+  const desdeStr = `${desde.anio}-${String(desde.mes).padStart(2, '0')}-01`
+  const hastaStr = `${hasta.anio}-${String(hasta.mes).padStart(2, '0')}-01`
+  const rows = await db.getAllAsync<TransaccionRow>(
+    'SELECT * FROM transacciones WHERE fecha >= ? AND fecha < ? ORDER BY fecha DESC',
+    desdeStr,
+    hastaStr,
   )
   return rows.map(toTransaccion)
 }
@@ -192,10 +290,11 @@ export async function insertTransaccion(db: SQLiteDatabase, t: Omit<Transaccion,
 export async function updateTransaccion(
   db: SQLiteDatabase,
   id: number,
-  t: { monto: number; descripcion: string; tipo: TipoTransaccion },
+  t: { fecha: string; monto: number; descripcion: string; tipo: TipoTransaccion },
 ): Promise<void> {
   await db.runAsync(
-    'UPDATE transacciones SET monto = ?, descripcion = ?, tipo = ? WHERE id = ?',
+    'UPDATE transacciones SET fecha = ?, monto = ?, descripcion = ?, tipo = ? WHERE id = ?',
+    t.fecha,
     t.monto,
     t.descripcion,
     t.tipo,
@@ -320,6 +419,63 @@ export async function setSaldosIniciales(
  * mes ancla en cero. No toca ingresos, gastos fijos ni transacciones registradas.
  */
 export async function resetHistorial(db: SQLiteDatabase, ymAncla: YearMonth): Promise<void> {
-  await db.execAsync('DELETE FROM estado_mensual; DELETE FROM reserva_override;')
+  await db.execAsync('DELETE FROM estado_mensual; DELETE FROM reserva_override; DELETE FROM escenario_items;')
   await cerrarMes(db, ymAncla, 0, 0)
+}
+
+export async function getEscenarioItems(db: SQLiteDatabase): Promise<EscenarioItem[]> {
+  const rows = await db.getAllAsync<EscenarioItemRow>(
+    'SELECT * FROM escenario_items ORDER BY anio_inicio, mes_inicio',
+  )
+  return rows.map(toEscenarioItem)
+}
+
+export async function insertEscenarioItem(
+  db: SQLiteDatabase,
+  item: Omit<EscenarioItem, 'id'>,
+): Promise<number> {
+  const result = await db.runAsync(
+    `INSERT INTO escenario_items (tipo, descripcion, monto, num_meses, anio_inicio, mes_inicio, activo)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    item.tipo,
+    item.descripcion,
+    item.monto,
+    item.numMeses,
+    item.inicio.anio,
+    item.inicio.mes,
+    item.activo ? 1 : 0,
+  )
+  return result.lastInsertRowId
+}
+
+export async function updateEscenarioItem(
+  db: SQLiteDatabase,
+  id: number,
+  item: Omit<EscenarioItem, 'id'>,
+): Promise<void> {
+  await db.runAsync(
+    `UPDATE escenario_items SET
+      tipo = ?, descripcion = ?, monto = ?, num_meses = ?, anio_inicio = ?, mes_inicio = ?, activo = ?
+     WHERE id = ?`,
+    item.tipo,
+    item.descripcion,
+    item.monto,
+    item.numMeses,
+    item.inicio.anio,
+    item.inicio.mes,
+    item.activo ? 1 : 0,
+    id,
+  )
+}
+
+export async function toggleEscenarioItem(db: SQLiteDatabase, id: number, activo: boolean): Promise<void> {
+  await db.runAsync('UPDATE escenario_items SET activo = ? WHERE id = ?', activo ? 1 : 0, id)
+}
+
+export async function deleteEscenarioItem(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM escenario_items WHERE id = ?', id)
+}
+
+export async function limpiarEscenario(db: SQLiteDatabase): Promise<void> {
+  await db.runAsync('DELETE FROM escenario_items')
 }

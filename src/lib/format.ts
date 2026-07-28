@@ -11,9 +11,27 @@ export function formatMXN(monto: number): string {
 }
 
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+const MESES_LARGOS = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+]
 
 export function formatMesCorto(ym: YearMonth): string {
   return MESES_CORTOS[ym.mes - 1]
+}
+
+export function formatMesLargo(ym: YearMonth): string {
+  return `${MESES_LARGOS[ym.mes - 1]} ${ym.anio}`
 }
 
 export function formatMontoCorto(monto: number): string {

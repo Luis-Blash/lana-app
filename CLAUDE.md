@@ -27,17 +27,26 @@ testable in isolation. UI and the store only orchestrate; they never compute.
 
 - `domain/month.ts` — month-range math: last day of month, clamping day 31, and counting real
   occurrences of a weekday in a month (a month can have 4 *or* 5 Fridays/Sundays — never assume 4).
-- `domain/disponible.ts` — `computeMonthSlice()`: the "disponible" formula for one month.
+- `domain/disponible.ts` — `computeMonthSlice()`: the "disponible" formula for one month. Also
+  `estaVigenteEnMes()`, which gates a `GastoFijo` by its optional `inicio`/`fin` window (used for
+  subscriptions with a fixed duration, e.g. "Amazon for 3 months").
 - `domain/msi.ts` — installment-purchase math (monthly payment, which months a purchase affects).
+- `domain/escenario.ts` — the simulator's `EscenarioItem` math (`unico` / `meses` / `recurrente`),
+  independent of and never persisted into real financial state.
 - `domain/projection.ts` — `projectMonths()`: rolls the formula forward N months, chaining the
-  carried-over cushion (`colchon`) month to month; also used by the simulator to inject a
-  hypothetical purchase and compare projections.
+  carried-over cushion (`colchon`) month to month; accepts an optional `extrasPorMes` to fold in a
+  simulated scenario without touching the real projection.
 
 **Disponible formula** (calendar month, forward-looking):
 ```
-disponible = ingresos_del_mes − gastos_fijos_del_mes − Σ mensualidades_MSI_activas
-           − aporte_reserva_del_mes − gastos_variables_ya_registrados + colchon_acumulado
+saldo_del_mes = ingresos_del_mes − gastos_fijos_del_mes − Σ mensualidades_MSI_activas
+              − aporte_reserva_del_mes − gastos_variables_ya_registrados − extras_de_escenario
+disponible = saldo_del_mes + colchon_acumulado
 ```
+`saldo_del_mes` (does the month alone hold up?) and `disponible` (does it hold up once the
+cushion from previous months is counted?) are shown as two separate numbers in the UI — a month can
+be in the red on its own while `disponible` stays positive because of savings, and that distinction
+is the point.
 The reserva (imprevistos fund) is a real accumulating balance (`reserva_saldo`), not a phantom
 buffer: `aporte_reserva` is subtracted from disponible *and* added to the fund each month;
 transactions tagged `imprevisto` draw down the fund instead of lowering disponible directly.
@@ -49,12 +58,21 @@ in `src/domain/types.ts`. The DB is provided via `SQLiteProvider` in `src/app/_l
 (`runAsync`/`getAllAsync`/`getFirstAsync`/`execAsync`), not the legacy WebSQL-style API.
 
 **Routing** (`src/app/`, expo-router, file-based, `typedRoutes` on): `_layout.tsx` wraps the app in
-`SQLiteProvider` and a tab navigator (Inicio / Simulador / Configuración). Path aliases: `@/*` →
-`src/*`, `@/assets/*` → `assets/*`.
+`SQLiteProvider` and a tab navigator (Inicio / Simulador / Ingresos / Gastos / Apartados). Path
+aliases: `@/*` → `src/*`, `@/assets/*` → `assets/*`.
 
-**Seed data** (`src/seed/`): `data.ts` holds the user's real recurring income/expenses as typed seed
-records; `loadSeed.ts` inserts them once on first launch if the DB is empty — useful as a reference
-for the shape of real data when adding features.
+**Store** (`src/store/useFinanceStore.ts`): loads a ±12-month window around the current month, not
+just "the current month" — `mesVisible` lets the UI navigate through it (`irAMes`/`mesAnterior`/
+`mesSiguiente`). Months before today are read back from the already-closed `estado_mensual` history;
+today is computed live; months ahead come from `proyeccionBase`. The simulator's `escenario` (a
+persisted list of `EscenarioItem`s) is projected separately into `proyeccionEscenario` and never
+merges into `proyeccionBase` — real financial state must never be derived from a hypothetical.
+
+**No seed data.** The app must always start with an empty database — no income, no expenses, no
+balances baked in (this repo is public; a seed with real numbers was removed for that reason and
+must never come back). `src/db/genesis.ts` only writes the zeroed "génesis" anchor month that
+`cerrarMesesPendientes` needs as a starting point. Every screen must have a working empty state
+(see `src/components/EmptyState.tsx`) since a first launch has nothing in it.
 
 ## Notable conventions
 

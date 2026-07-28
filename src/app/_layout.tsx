@@ -5,12 +5,12 @@ import { SQLiteProvider } from 'expo-sqlite'
 import type { SQLiteDatabase } from 'expo-sqlite'
 
 import { cerrarMesesPendientes } from '@/db/cierre'
+import { asegurarAnclaGenesis } from '@/db/genesis'
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db/schema'
-import { loadSeedIfEmpty } from '@/seed/loadSeed'
 
 async function initDatabase(db: SQLiteDatabase) {
   await migrateDbIfNeeded(db)
-  await loadSeedIfEmpty(db)
+  await asegurarAnclaGenesis(db)
   await cerrarMesesPendientes(db)
 }
 

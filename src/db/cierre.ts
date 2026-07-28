@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite'
 import { computeMonthSlice } from '@/domain/disponible'
 import { addMonths } from '@/domain/month'
 import { YearMonth } from '@/domain/types'
+import { mesActual } from '@/lib/fechas'
 
 import {
   cerrarMes,
@@ -13,11 +14,6 @@ import {
   getReservaAporteMes,
   getTransaccionesDelMes,
 } from './queries'
-
-function mesActual(): YearMonth {
-  const hoy = new Date()
-  return { anio: hoy.getFullYear(), mes: hoy.getMonth() + 1 }
-}
 
 const LIMITE_MESES_ATRAS = 24
 

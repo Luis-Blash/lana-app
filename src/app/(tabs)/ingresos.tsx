@@ -62,10 +62,12 @@ export default function IngresosScreen() {
       <SectionTitle>Ingresos fijos</SectionTitle>
       <Help>El dinero que te entra cada mes: sueldo, quincena, bono. Toca uno para editarlo.</Help>
 
-      <View className="flex-row items-center justify-between rounded-xl bg-green-100 px-4 py-3 dark:bg-green-950">
-        <Text className="font-medium text-green-800 dark:text-green-300">Total al mes</Text>
-        <Text className="text-lg font-bold tabular-nums text-green-700 dark:text-green-300">{formatMXN(total)}</Text>
-      </View>
+      {ingresos.length > 0 && (
+        <View className="flex-row items-center justify-between rounded-xl bg-green-100 px-4 py-3 dark:bg-green-950">
+          <Text className="font-medium text-green-800 dark:text-green-300">Total al mes</Text>
+          <Text className="text-lg font-bold tabular-nums text-green-700 dark:text-green-300">{formatMXN(total)}</Text>
+        </View>
+      )}
 
       {ingresos.map((i) => (
         <Pressable

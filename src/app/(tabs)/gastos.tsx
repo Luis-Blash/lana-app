@@ -4,18 +4,31 @@ import { Pressable, Text, View } from 'react-native'
 
 import { Screen } from '@/components/Screen'
 import { BotonPrimario, Chip, Help, SectionTitle, TextField } from '@/components/ui'
-import { deleteGastoFijo, getGastosFijos, insertGastoFijo, updateGastoFijo } from '@/db/queries'
-import { Frecuencia, GastoFijo } from '@/domain/types'
-import { DIAS_SEMANA, proximosMeses } from '@/lib/fechas'
+import {
+  deleteCompraMsi,
+  deleteGastoFijo,
+  desactivarCompraMsi,
+  getComprasMsi,
+  getGastosFijos,
+  insertGastoFijo,
+  updateGastoFijo,
+} from '@/db/queries'
+import { addMonths, monthKey } from '@/domain/month'
+import { estaActivaEnMes, mesesAfectados } from '@/domain/msi'
+import { CompraMsi, Frecuencia, GastoFijo, YearMonth } from '@/domain/types'
+import { DIAS_SEMANA, mesActual, proximosMeses, ventanaMeses } from '@/lib/fechas'
 import { formatMesCorto, formatMXN } from '@/lib/format'
 import { useFinanceStore } from '@/store/useFinanceStore'
+
+const PLAZOS_DURACION = [2, 3, 6, 12]
 
 export default function GastosScreen() {
   const db = useSQLiteContext()
   const cargarStore = useFinanceStore((s) => s.cargar)
-  const totalMes = useFinanceStore((s) => s.slice?.gastosFijos ?? 0)
+  const totalMes = useFinanceStore((s) => s.sliceVisible?.gastosFijos ?? 0)
 
   const [gastos, setGastos] = useState<GastoFijo[]>([])
+  const [comprasMsi, setComprasMsi] = useState<CompraMsi[]>([])
 
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [nombre, setNombre] = useState('')
@@ -27,9 +40,13 @@ export default function GastosScreen() {
   const [diaSemana, setDiaSemana] = useState<number | null>(null)
   const [cadaNMeses, setCadaNMeses] = useState(2)
   const [proximoMes, setProximoMes] = useState<number | null>(null)
+  const [paraSiempre, setParaSiempre] = useState(true)
+  const [inicio, setInicio] = useState<YearMonth>(mesActual())
+  const [duracion, setDuracion] = useState(3)
 
   const recargar = useCallback(async () => {
     setGastos(await getGastosFijos(db))
+    setComprasMsi(await getComprasMsi(db))
     await cargarStore(db)
   }, [db, cargarStore])
 
@@ -49,6 +66,9 @@ export default function GastosScreen() {
     setDiaSemana(null)
     setCadaNMeses(2)
     setProximoMes(null)
+    setParaSiempre(true)
+    setInicio(mesActual())
+    setDuracion(3)
   }
 
   function cargarParaEditar(g: GastoFijo) {
@@ -62,6 +82,17 @@ export default function GastosScreen() {
     setDiaSemana(g.diaSemana)
     setCadaNMeses(g.cadaNMeses ?? 2)
     setProximoMes(g.mesAncla)
+    setParaSiempre(!g.fin)
+    setInicio(g.inicio ?? mesActual())
+    if (g.inicio && g.fin) {
+      setDuracion(monthKey(g.fin) >= monthKey(g.inicio) ? absoluteDiff(g.inicio, g.fin) + 1 : 3)
+    } else {
+      setDuracion(3)
+    }
+  }
+
+  function absoluteDiff(a: YearMonth, b: YearMonth): number {
+    return (b.anio - a.anio) * 12 + (b.mes - a.mes)
   }
 
   async function guardar() {
@@ -77,6 +108,8 @@ export default function GastosScreen() {
       diaSemana: frecuencia === 'semanal' ? diaSemana : null,
       cadaNMeses: frecuencia === 'cada_n_meses' ? cadaNMeses : null,
       mesAncla: frecuencia === 'cada_n_meses' ? proximoMes : null,
+      inicio: paraSiempre ? null : inicio,
+      fin: paraSiempre ? null : addMonths(inicio, duracion - 1),
     }
     if (editandoId != null) {
       await updateGastoFijo(db, editandoId, datos)
@@ -131,6 +164,12 @@ export default function GastosScreen() {
           </View>
         </Pressable>
       ))}
+
+      {gastos.length === 0 && (
+        <Text className="px-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Todavía no tienes gastos fijos registrados. Agrégalos abajo.
+        </Text>
+      )}
 
       <View className="mt-2 gap-2 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
         <View className="flex-row gap-2">
@@ -194,6 +233,34 @@ export default function GastosScreen() {
           </>
         )}
 
+        <Text className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">¿Por cuánto tiempo?</Text>
+        <View className="flex-row flex-wrap gap-2">
+          <Chip label="Para siempre" selected={paraSiempre} onPress={() => setParaSiempre(true)} />
+          <Chip label="Por tiempo limitado" selected={!paraSiempre} onPress={() => setParaSiempre(false)} />
+        </View>
+
+        {!paraSiempre && (
+          <>
+            <Text className="text-xs text-zinc-500 dark:text-zinc-400">¿Cuántos meses?</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {PLAZOS_DURACION.map((n) => (
+                <Chip key={n} label={`${n} meses`} selected={duracion === n} onPress={() => setDuracion(n)} />
+              ))}
+            </View>
+            <Text className="text-xs text-zinc-500 dark:text-zinc-400">¿Desde cuándo?</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {ventanaMeses(3, 6).map((m) => (
+                <Chip
+                  key={monthKey(m)}
+                  label={`${formatMesCorto(m)} ${m.anio}`}
+                  selected={monthKey(m) === monthKey(inicio)}
+                  onPress={() => setInicio(m)}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
         <BotonPrimario label={editandoId != null ? 'Guardar cambios' : 'Agregar gasto fijo'} onPress={guardar} />
         {editandoId != null ? (
           <Pressable onPress={limpiar} className="items-center py-1">
@@ -201,13 +268,63 @@ export default function GastosScreen() {
           </Pressable>
         ) : null}
       </View>
+
+      <SectionTitle>Compras a meses</SectionTitle>
+      <Help>Lo que estás pagando a MSI. Se registran desde el botón + de Inicio.</Help>
+
+      {comprasMsi.length === 0 ? (
+        <Text className="px-1 text-xs text-zinc-500 dark:text-zinc-400">No tienes compras a meses registradas.</Text>
+      ) : (
+        comprasMsi.map((c) => {
+          const activaHoy = estaActivaEnMes(c, mesActual())
+          const restantes = mesesAfectados(c.fechaInicio, c.numMeses).filter(
+            (m) => monthKey(m) >= monthKey(mesActual()),
+          ).length
+          return (
+            <View
+              key={c.id}
+              className="flex-row items-center justify-between rounded-lg bg-zinc-100 px-4 py-3 dark:bg-zinc-800"
+            >
+              <View className="flex-1 pr-2">
+                <Text className="font-medium text-zinc-900 dark:text-zinc-100">{c.descripcion}</Text>
+                <Text className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {formatMXN(c.mensualidad)}/mes · {c.activa && activaHoy ? `quedan ${restantes} de ${c.numMeses}` : 'terminada'}
+                </Text>
+              </View>
+              <View className="flex-row items-center gap-3">
+                {c.activa && (
+                  <Pressable
+                    onPress={async () => {
+                      await desactivarCompraMsi(db, c.id)
+                      await recargar()
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text className="text-xs text-amber-600 dark:text-amber-400">Ya la pagué</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  onPress={async () => {
+                    await deleteCompraMsi(db, c.id)
+                    await recargar()
+                  }}
+                  hitSlop={8}
+                >
+                  <Text className="text-red-500">Eliminar</Text>
+                </Pressable>
+              </View>
+            </View>
+          )
+        })
+      )}
     </Screen>
   )
 }
 
 function describeFrecuencia(g: GastoFijo): string {
-  if (g.frecuencia === 'mensual') return `Cada mes, el día ${g.diaDelMes}`
-  if (g.frecuencia === 'semanal') return `Cada semana, ${DIAS_SEMANA[g.diaSemana ?? 0]}`
+  const duracion = g.fin && g.inicio ? ` · ${formatMesCorto(g.inicio)}–${formatMesCorto(g.fin)} ${g.fin.anio}` : ''
+  if (g.frecuencia === 'mensual') return `Cada mes, el día ${g.diaDelMes}${duracion}`
+  if (g.frecuencia === 'semanal') return `Cada semana, ${DIAS_SEMANA[g.diaSemana ?? 0]}${duracion}`
   const proxima = g.mesAncla ? ` · próxima: ${formatMesCorto({ anio: 0, mes: g.mesAncla })}` : ''
-  return `Cada ${g.cadaNMeses} meses${proxima}`
+  return `Cada ${g.cadaNMeses} meses${proxima}${duracion}`
 }

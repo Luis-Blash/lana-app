@@ -15,6 +15,14 @@ export interface ProjectionInput {
   /** Solo el mes actual tiene variables/imprevistos conocidos; los meses futuros usan 0 (conservador, sin inventar gasto). */
   variablesPorMes?: (ym: YearMonth) => number
   imprevistosPorMes?: (ym: YearMonth) => number
+  /** Impacto de ítems de escenario (simulación), por mes. */
+  extrasPorMes?: (ym: YearMonth) => number
+  /**
+   * Si un mes usa el monto alto de los rangos (conservador) o el bajo (lo que ya sabes).
+   * Default: siempre conservador. El mes en curso normalmente pasa `false`, porque de ese
+   * mes ya se conocen los gastos reales y así cuadra con lo que muestra Inicio.
+   */
+  usarValorAltoPorMes?: (ym: YearMonth) => boolean
 }
 
 export function projectMonths(input: ProjectionInput): ProjectedMonth[] {
@@ -27,6 +35,8 @@ export function projectMonths(input: ProjectionInput): ProjectedMonth[] {
     const reservaAporte = input.reservaAportePorMes(ym)
     const variables = input.variablesPorMes?.(ym) ?? 0
     const imprevistos = input.imprevistosPorMes?.(ym) ?? 0
+    const extras = input.extrasPorMes?.(ym) ?? 0
+    const usarValorAlto = input.usarValorAltoPorMes?.(ym) ?? true
     const msiDelMes = input.comprasMsi.filter((c) => estaActivaEnMes(c, ym))
 
     const slice = computeMonthSlice({
@@ -38,8 +48,9 @@ export function projectMonths(input: ProjectionInput): ProjectedMonth[] {
       variablesDelMes: variables,
       reservaSaldoEntrante: reservaSaldo,
       imprevistosDelMes: imprevistos,
+      extrasDelMes: extras,
       colchonEntrante: colchon,
-      usarValorAlto: true,
+      usarValorAlto,
     })
 
     // La reserva no baja de cero: el exceso ya se restó del disponible en el slice.
@@ -51,15 +62,4 @@ export function projectMonths(input: ProjectionInput): ProjectedMonth[] {
   }
 
   return resultado
-}
-
-/** Inyecta una compra MSI hipotética y reproyecta, para el simulador "¿me lo puedo comprar?". */
-export function proyectarConCompraHipotetica(
-  input: ProjectionInput,
-  compraHipotetica: CompraMsi,
-): ProjectedMonth[] {
-  return projectMonths({
-    ...input,
-    comprasMsi: [...input.comprasMsi, compraHipotetica],
-  })
 }

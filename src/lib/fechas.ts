@@ -16,3 +16,8 @@ export function mesAncla(): YearMonth {
 export function proximosMeses(n: number): YearMonth[] {
   return Array.from({ length: n }, (_, i) => addMonths(mesActual(), i))
 }
+
+/** Meses desde `atras` meses en el pasado hasta `adelante` meses en el futuro, incluyendo hoy. */
+export function ventanaMeses(atras: number, adelante: number): YearMonth[] {
+  return Array.from({ length: atras + adelante + 1 }, (_, i) => addMonths(mesActual(), i - atras))
+}
